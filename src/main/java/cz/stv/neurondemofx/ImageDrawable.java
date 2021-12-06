@@ -21,5 +21,5 @@ package cz.stv.neurondemofx;
  */
 public interface ImageDrawable
 {
-  public void draw(byte[][] matrix);
+  public void draw(short[][] matrix);
 }

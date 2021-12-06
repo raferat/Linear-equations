@@ -1,16 +1,14 @@
 package cz.stv.neurondemofx;
 
-
-import java.io.InputStream;
+import cz.stv.neuronnetworkfromnet.NeuralNetwork;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import javafx.application.Application;
 
-import javafx.collections.ObservableList;
-import javafx.event.ActionEvent;
 
-import javafx.geometry.Pos;
-import javafx.scene.Node;
 
 import javafx.scene.Scene;
 
@@ -19,19 +17,16 @@ import javafx.scene.canvas.GraphicsContext;
 
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 
-import javafx.scene.input.KeyEvent;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.MouseEvent;
 
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import javafx.scene.paint.Color;
-import javafx.scene.text.Font;
+import javafx.stage.FileChooser;
 
 import javafx.stage.Stage;
 
@@ -47,19 +42,19 @@ public class Window extends Application
   /**
    * height of matrix
    */
-  private static final int MATRIX_HEIGHT = 16;
+  final int MATRIX_HEIGHT;
 
   /**
    * width of matrix
    */
-  private static final int MATRIX_WIDTH = 16;
+  final int MATRIX_WIDTH;
 
   /**
    * scale of canvas
    *
    * @see canvas
    */
-  private static final double CANVAS_SCALE = 50d;
+  final double CANVAS_SCALE = 30d;
 
   /**
    * width of canvas
@@ -67,7 +62,7 @@ public class Window extends Application
    * @see MATRIX_WIDTH
    * @see CANVAS_SCALE
    */
-  private static final double CANVAS_WIDTH = MATRIX_WIDTH * CANVAS_SCALE;
+  final double CANVAS_WIDTH;
 
   /**
    * height of canvas
@@ -75,19 +70,19 @@ public class Window extends Application
    * @see MATRIX_HEIGHT
    * @see CANVAS_SCALE
    */
-  private static final double CANVAS_HEIGHT = MATRIX_HEIGHT * CANVAS_SCALE;
+  final double CANVAS_HEIGHT;
 
-  private TextField correct;
-  private TextField tresholdInput;
+  TextField correct;
+  TextField tresholdInput;
 
-  private Canvas canvas;
+  Canvas canvas;
 
   /**
    * graphicsContext is context of canvas.
    *
    * @see canvas
    */
-  private GraphicsContext graphicsContext;
+  GraphicsContext graphicsContext;
 
   /**
    * boolean that indicates if draw method should draw.
@@ -97,7 +92,7 @@ public class Window extends Application
    * @see startPainting
    * @see stopPainting
    */
-  private boolean isPainting = false;
+  boolean isPainting = false;
 
   /**
    * boolean that indicates if mouse is out for method draw.
@@ -107,227 +102,80 @@ public class Window extends Application
    * @see entered
    * @see exited
    */
-  private boolean isOut = false;
+  boolean isOut = false;
 
-  private final ImageList imageList = new ImageList( MATRIX_WIDTH , MATRIX_HEIGHT );
+  final ImageList imageList;
 
-  private byte currentColor = 1;
+  byte currentColor = 1;
 
   /**
    * int that indicate last coordinate of mouse.
    */
-  private Scene scene;
-  private Stage stage;
+  Scene scene;
+  Stage stage;
 
-  private final Button buttonNext = new Button( ">" );
-  private final Button buttonBack = new Button( "<" );
+  final Button buttonNext = new Button( ">" );
+  final Button buttonBack = new Button( "<" );
 
-  private final Button buttonErase = new Button( "Erase" );
-  private final Button buttonLoad = new Button( "Open" );
-  private final Button buttonSave = new Button( "Save" );
-  private final Button buttonAdd = new Button( "Add" );
-  private final Button buttonRemove = new Button( "Delete" );
+  final Button buttonErase = new Button( "Erase" );
+  final Button buttonLoad = new Button( "Open" );
+  final Button buttonSave = new Button( "Save" );
+  final Button buttonAdd = new Button( "Add" );
+  final Button buttonRemove = new Button( "Delete" );
   
-  private final Button buttonWhite; 
+  final Button buttonWhite; 
 
-  private final Label status = new Label( "1/1" );
+  final Label status = new Label( "1/1" );
   
-  private final int GRAY_COLOR_COUNT = 5;
+  final int GRAY_COLOR_COUNT = 5;
   
-  private final ArrayList<Button> grayButtonChoosers = new ArrayList<>();
+  final ArrayList<Button> grayButtonChoosers = new ArrayList<>();
   
-  private VBox colorPicker = new VBox();
+  VBox colorPicker = new VBox();
 
   
+  final FileChooser fileChooser;
   
+  final WindowEventHandler windowEventHandler = new WindowEventHandler(this);
+  
+  final ProgressBar[] indicators = new ProgressBar[10];
+  
+  final NeuralNetwork neuralNetwork;
   
   public Window()
   {
-    InputStream ins = Window.class.getResourceAsStream("/Erase-clean.png");
-    Image img = new javafx.scene.image.Image(ins);
+    fileChooser = new FileChooser();
+    fileChooser.setTitle("Open mnist files");
+    List<File> l = fileChooser.showOpenMultipleDialog(stage);
+    imageList = ImageList.parse( l . toArray(new File[l.size()] ));
+    MATRIX_HEIGHT = imageList.imageHeight;
+    MATRIX_WIDTH = imageList.imageWidth;
     
-    buttonWhite = new Button("", new ImageView( img ));
+    CANVAS_WIDTH = MATRIX_WIDTH * CANVAS_SCALE;
+    CANVAS_HEIGHT = MATRIX_HEIGHT * CANVAS_SCALE;
+    
+    Image img = new javafx.scene.image.Image(Window.class.getResourceAsStream("/Eraser.png"));
+    ImageView view = new ImageView( img );
+    buttonWhite = new Button("", view );
+    
+    
+    fileChooser.setTitle("Folder to save:");
+    fileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Rafeson", ".rafeson"));
+    
+    neuralNetwork = new NeuralNetwork( imageList.imageHeight * imageList.imageWidth , 12 , 10);
+    try
+    {
+      neuralNetwork . readFrom(Window.class.getResourceAsStream("/2.matrix"));
+    }
+    catch ( IOException e )
+    {
+      e.printStackTrace();
+    }
   }
+  
   
   
 //===================================================================================================================================================
-  /**
-   * <code>initScene</code> is initializing the scene.
-   *
-   * @param stage is current window's stage
-   * @see javafx.stage
-   */
-  private void initScene ( Stage stage )
-  {
-    scene = new Scene( new HBox( initVBox(initCanvas() , initToolbar()) , initClolorPicker() ) );
-    scene.setOnKeyPressed( this :: pressed );
-    scene.getRoot().setStyle( "-fx-background-color: white" );
-
-    scene.getRoot().requestFocus();
-    stage.setResizable( false );
-    stage.setScene( scene );
-    stage.setTitle( "Neuron FX" );
-    updateControls();
-    stage.show();
-  }
-
-  private HBox initToolbar ()
-  {
-    initButtons();
-    HBox hBox = new HBox( 10d , buttonBack , status , buttonAdd , buttonRemove , buttonErase , buttonLoad , buttonSave , buttonNext );
-    hBox.setAlignment( Pos.CENTER );
-    ObservableList<Node> content = hBox.getChildren();
-    double buttonWidth = ( canvas.getWidth() - hBox.getSpacing() * ( content.size() -1 ) ) / content.size();
-
-    for ( Node node : content )
-    {
-      if ( node instanceof Button )
-      {
-        Button tmp = ( Button ) node;
-        tmp.setPrefSize( buttonWidth , 50d );
-      }
-      else if ( node instanceof Label )
-      {
-        Label tmp = ( Label ) node;
-        tmp.setPrefSize( buttonWidth , 50d );
-        tmp.setFont( new Font( 20d ) );
-        tmp.setAlignment( Pos.CENTER );
-      }
-    }
-
-    return hBox;
-  }
-
-//------------------------------------------------------------------------------
-  /**
-   * <code>initCanvas</code> is initializing the canvas.
-   *
-   * @see canvas
-   * @see javafx.scene.canvas.Canvas
-   */
-  private Canvas initCanvas ()
-  {
-    //initializing canvas
-    canvas = new Canvas( CANVAS_WIDTH , CANVAS_HEIGHT );
-    graphicsContext = canvas.getGraphicsContext2D();
-
-    //setting up listeners
-    canvas.setOnMousePressed( this :: startPainting );
-    canvas.setOnMouseReleased( this :: stopPainting );
-    canvas.setOnMouseDragged( this :: drawMoreEfficient );
-    canvas.setOnMouseExited( this :: exited );
-    canvas.setOnMouseEntered( this :: entered );
-
-    return canvas;
-  }
-  
-  
-  private VBox initVBox (Node... nodes)
-  {
-    return new VBox(nodes);
-  }
-
-  private void initButtons ()
-  {
-    buttonErase.setOnAction( ( e ) ->
-    {
-      imageList.current().erase();
-      updateControls();
-      repaintEfficient();
-    } );
-    buttonNext.setOnAction( ( e ) ->
-    {
-      imageList.next();
-      updateControls();
-      repaintEfficient();
-    } );
-    buttonBack.setOnAction( ( e ) ->
-    {
-      imageList.back();
-      updateControls();
-      repaintEfficient();
-    } );
-
-    buttonSave.setOnAction( ( e ) ->
-    {
-      imageList.save( "/tmp/image.json" );
-      updateControls();
-      repaintEfficient();
-    } );
-
-    buttonLoad.setOnAction( ( e ) ->
-    {
-      imageList.load( "/tmp/image.json" );
-      updateControls();
-      repaintEfficient();
-    } );
-
-    buttonAdd.setOnAction( ( e ) ->
-    {
-      imageList.add();
-      updateControls();
-      repaintEfficient();
-    } );
-
-    buttonRemove.setOnAction( ( e ) ->
-    {
-      if ( imageList.position() != 0 )
-      {
-        imageList.delete();
-        if ( imageList.position() == imageList.size() )
-        {
-          imageList.back();
-        }
-        updateControls();
-        repaintEfficient();
-      }
-    } );
-  }
-  
-  private VBox initClolorPicker()
-  {
-    grayButtonChoosers.add(buttonWhite);
-    
-    double gab = 10d;
-    double buttonWidth = 100d;
-    double buttonHeight = ( ( MATRIX_HEIGHT * CANVAS_SCALE + 50d ) - gab * (GRAY_COLOR_COUNT + grayButtonChoosers.size()-1 ) ) / ( GRAY_COLOR_COUNT + grayButtonChoosers.size() ) ;
-    
-    buttonWhite.setPrefSize(buttonWidth , buttonHeight);
-    buttonWhite.setMinSize(buttonWidth , buttonHeight);
-    buttonWhite.setMaxSize(buttonWidth , buttonHeight);
-    
-    ( (ImageView) buttonWhite.getGraphic()).setPreserveRatio(true);
-    ( (ImageView) buttonWhite.getGraphic()).setFitHeight(buttonHeight);
-    ( (ImageView) buttonWhite.getGraphic()).setFitWidth(buttonWidth);
-    
-    
-    buttonWhite.setOnAction(this::buttonClicked);
-    
-    
-    
-    
-    for ( int i = 0 ; i < GRAY_COLOR_COUNT ; i ++ )
-    {
-      Canvas c = new Canvas((int)buttonHeight - 10, (int)buttonHeight - 10);
-      
-      Color col = Color.rgb( ( 127 / GRAY_COLOR_COUNT ) * i , ( 127 / GRAY_COLOR_COUNT ) * i , ( 127 / GRAY_COLOR_COUNT ) * i );
-      
-      c.getGraphicsContext2D().setFill( col );
-      c.getGraphicsContext2D().fillRect(0, 0, c.getWidth(), c.getHeight());
-      
-      Button b = new Button("" , c);
-      b.setPrefSize(buttonWidth , buttonHeight);
-      b.setOnAction(this::buttonClicked);
-      grayButtonChoosers.add (b);
-    }
-    
-    
-    
-    colorPicker = new VBox ( gab ,  grayButtonChoosers . toArray(new Button[grayButtonChoosers.size()]));
-    
-    
-    return colorPicker;
-  }
   
   private void updateColorPicker()
   {
@@ -349,7 +197,7 @@ public class Window extends Application
       
       Button b = new Button("" , c);
       b.setPrefSize(buttonWidth , buttonHeight);
-      b.setOnAction(this::buttonClicked);
+      b.setOnAction(windowEventHandler::buttonClicked);
       grayButtonChoosers.set(i , b);
     }
   }
@@ -370,7 +218,7 @@ public class Window extends Application
       
     Button b = new Button("" , c);
     b.setPrefSize(buttonWidth , buttonHeight);
-    b.setOnAction(this::buttonClicked);
+    b.setOnAction(windowEventHandler::buttonClicked);
       
     grayButtonChoosers . add (grayButtonChoosers.size()-2 , b); 
     
@@ -379,41 +227,9 @@ public class Window extends Application
   }
   
 
-//===================================================================================================================================================  
-  private void startPainting ( MouseEvent event )
-  {
-    isPainting = true;
-    scene.getRoot().requestFocus();
-  }
-
-//------------------------------------------------------------------------------
-  private void stopPainting ( MouseEvent event )
-  {
-    isPainting = false;
-    isOut = false;
-  }
-
-//------------------------------------------------------------------------------
-  private void exited ( MouseEvent event )
-  {
-    if ( isPainting )
-    {
-      isPainting = false;
-      isOut = true;
-    }
-  }
-
-//------------------------------------------------------------------------------
-  private void entered ( MouseEvent event )
-  {
-    if ( isOut )
-    {
-      isPainting = true;
-    }
-  }
 
 //------------------------------------------------------------------------------  
-  private void updateControls ()
+  void updateControls ()
   {
     updateLabel();
     updateButtons();
@@ -433,81 +249,24 @@ public class Window extends Application
     status.setText( s );
   }
 
-//------------------------------------------------------------------------------
-  private void pressed ( KeyEvent event )
+  void udateIndicators()
   {
-    KeyCode key = event.getCode();
-    if ( key == KeyCode.C )
-    {
-      imageList.current().erase();
-      repaintEfficient();
-      updateControls();
-    }
-
-  }
-  
-  private void buttonClicked( ActionEvent e )
-  {
-    if ( e.getSource() instanceof Button ) 
-    {
-      Button b = (Button) e.getSource();
-      int index = grayButtonChoosers.indexOf(b);
-      currentColor = (byte) ((127 / grayButtonChoosers.size()) * index) ;
-    }
-  }
-//===================================================================================================================================================
-
-  private void drawMoreEfficient ( MouseEvent event )
-  {
-    if ( isPainting )
-    {
-      int xDraw = ( int ) ( event.getX() / CANVAS_SCALE );
-      int yDraw = ( int ) ( event.getY() / CANVAS_SCALE );
-
-      imageList.current().draw( ( byte[][] matrix ) ->
+    double[] input = new double[imageList.imageWidth*imageList.imageHeight];
+    int counter = 0;
+    for ( int x = 0 ; x < imageList.current().matrix.length ; x ++ )
+      for ( int y = 0 ; y < imageList.current().matrix[x].length ; y ++ )
       {
-        matrix[ xDraw ][ yDraw ] = currentColor;
-        graphicsContext.setFill( Color.WHITE );
-        graphicsContext.fillRect( 0 , 0 , MATRIX_WIDTH * CANVAS_SCALE , MATRIX_HEIGHT * CANVAS_SCALE );
-        
-
-        for ( int x = 0 ; x < matrix.length ; x ++ )
-        {
-          for ( int y = 0 ; y < matrix[ x ].length ; y ++ )
-          {
-            if ( matrix[ x ][ y ] != 0 )
-            {
-              graphicsContext.setFill( Color.rgb(matrix[x][y], matrix[x][y], matrix[x][y]) );
-              graphicsContext.fillRect( x * CANVAS_SCALE , y * CANVAS_SCALE , CANVAS_SCALE , CANVAS_SCALE );
-            }
-          }
-        }
-
-      } );
-    }
-  }
-
-  private void repaintEfficient ()
-  {
-    imageList.current().draw( ( byte[][] matrix ) ->
-    {
-      graphicsContext.setFill( Color.WHITE );
-      graphicsContext.fillRect( 0 , 0 , MATRIX_WIDTH * CANVAS_SCALE , MATRIX_HEIGHT * CANVAS_SCALE );
-      
-      for ( int x = 0 ; x < matrix.length ; x ++ )
-      {
-        for ( int y = 0 ; y < matrix[ x ].length ; y ++ )
-        {
-          if ( matrix[ x ][ y ] != 0 )
-          {
-            graphicsContext.setFill( Color.rgb(matrix[x][y], matrix[x][y], matrix[x][y]) );
-            graphicsContext.fillRect( x * CANVAS_SCALE , y * CANVAS_SCALE , CANVAS_SCALE , CANVAS_SCALE );
-          }
-        }
+        input[counter] = (imageList.current().matrix[y][x]+1) / 255;
+        counter ++;
       }
-
-    } );
-
+    
+    double [] output = neuralNetwork.process(input);
+    
+    System.out.println(Arrays.toString(output));
+    
+    for ( int i = 0 ; i < output.length ; i ++ )
+      indicators[i].setProgress(output[i]);
+      
   }
 
 //===================================================================================================================================================  
@@ -520,9 +279,13 @@ public class Window extends Application
   public void start ( Stage stage )
   {
     this.stage = stage;
-    imageList.add();
-    initScene( stage );
-
+    if ( imageList.size() == 0 )
+      imageList.add();
+    
+    
+    new WindowInitializer() . initScene(stage , this );
+    
+    windowEventHandler.repaintEfficient();
   }
 
 //===================================================================================================================================================

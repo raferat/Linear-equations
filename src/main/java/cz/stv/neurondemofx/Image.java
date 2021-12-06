@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.io.Writer;
 
 import com.google.gson.*;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 /**
  *
@@ -31,13 +32,15 @@ public class Image implements Serializable
   
   public int width, height;
   
-  public byte[][] matrix;
+  public int label;
+  
+  public short[][] matrix;
   
   public Image(int width , int height)
   {
     this.width = width;
     this.height = height;
-    matrix = new byte[width][height];    
+    matrix = new short[width][height];    
     
   }
   
@@ -56,6 +59,23 @@ public class Image implements Serializable
     return matrix[0].length;
   }
   
+  public static Image readNextImage ( BufferedInputStream fis , int size ) throws IOException
+  {
+    Image g = new Image(size , size);
+    
+    byte[] read = new byte[size];
+    for (int y = 0; y < size; y++)
+    {
+      for ( int x = 0 ; x < size ; x ++ )
+        g.setPixel(x , y , (short) (255 - fis.read()));
+    }
+
+    return g;
+  }
+  
+  
+
+  
   
   public static Image load(Reader reader)
   {
@@ -72,7 +92,7 @@ public class Image implements Serializable
         matrix[x][y] = 0;
   }
   
-  public void setPixel ( int x , int y , byte value)
+  public void setPixel ( int x , int y , short value)
   {
     matrix[x][y] = value;
   }
@@ -88,5 +108,11 @@ public class Image implements Serializable
   {
     imageDrawable.draw(matrix);
     
+  }
+
+  @Override
+  public String toString()
+  {
+    return "" + label;
   }
 }
